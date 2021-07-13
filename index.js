@@ -15,17 +15,27 @@
 *
 *   /ipfs/add
 *   /ipfs/import
+*   /ipfs/folder
 *
 *****************************************/
 (() => {
+  var root = this
+  if (typeof root.alert !== "undefined") {
+    Alert = alert
+  } else {
+    Alert = console.error
+  }
   class Thing {
     constructor(o) {
       this.host = o.host
       this.account = o.account
+      this.ethereum = o.ethereum
+      this.fetch = o.fetch
+      this.FormData = o.FormData
     }
     async sign (message) {
       try {
-        let res = await ethereum.request(
+        let res = await this.ethereum.request(
           {
             method: 'eth_signTypedData_v4',
             params: [ this.account, JSON.stringify(message) ],
@@ -34,31 +44,51 @@
         )
         return res;
       } catch (e) {
-        alert(e.message)
+        Alert(e.message)
       }
     }
-    async request(path, o) {
-      let r = await fetch(this.host + path, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(o)
-      }).then((res) => {
-        return res.json()
-      })
-      return r
+    async request(method, path, o, type) {
+      if (method === "GET") {
+        let url = (path.startsWith("http") ? path : this.host + path)
+        let r = await this.fetch(url).then((res) => {
+          return res.json()
+        })
+        return r;
+      } else {
+        if (type === "blob") {
+          let fd = new this.FormData()
+          fd.append('file', blob)
+          let r = await this.fetch(this.host + path, {
+            method: "POST",
+            body: fd
+          }).then((res) => {
+            return res.json()
+          })
+          return r
+        } else {
+          let r = await this.fetch(this.host + path, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(o)
+          }).then((res) => {
+            return res.json()
+          })
+          return r
+        }
+      }
     }
   }
   class Token extends Thing {
     async init(type) {
-      let tokenIdURL = await this.request("/token/init", {
+      let tokenIdURL = await this.request("POST", "/token/init", {
         type: type,
         address: this.account
       }).then((res) => {
         return res.url
       })
-      let tokenId = await fetch(tokenIdURL).then((res) => {
-        return res.json()
-      }).then((res) => { return res.tokenId })
+      let tokenId = await this.request("GET", tokenIdURL).then((res) => {
+        return res.tokenId
+      })
       return tokenId
     }
     build (body) {
@@ -66,10 +96,10 @@
       if (!body.creators) {
         body.creators = [{ account: this.account, value: 10000 }]
       }
-      return this.request("/token/build", { body, type })
+      return this.request("POST", "/token/build", { body, type })
     }
     send (body, sig) {
-      return this.request("/token/send", { body, sig })
+      return this.request("POST", "/token/send", { body, sig })
     }
     async create (body) {
       let type = (body.supply && body.supply > 1 ? "ERC1155": "ERC721")
@@ -84,7 +114,7 @@
         let sent = await this.send(builtToken, sig)
         return sent
       } else {
-        alert("name, description, and image attributes must be set")
+        Alert("name, description, and image attributes must be set")
       }
     }
   }
@@ -93,18 +123,11 @@
   *********************/
   class VIPFS extends Thing {
     async upload(blob) {
-      let fd = new FormData()
-      fd.append('file', blob)
-      let response = await fetch(this.host + "/ipfs/add", {
-        method: "POST",
-        body: fd
-      }).then((res) => {
-        return res.json()
-      })
+      let response = await this.request("POST", this.host + "/ipfs/add", blob, "blob")
       return response.cid
     }
     async import(url) {
-      let response = await this.request("/ipfs/import", { url })
+      let response = await this.request("POST", "/ipfs/import", { url })
       if (response.error) {
         throw new Error(response.error)
       } else {
@@ -119,7 +142,7 @@
       *   ...
       * }
       ************************/
-      let response = await this.request("/ipfs/folder", mapping)
+      let response = await this.request("POST", "/ipfs/folder", mapping)
       if (response.error) {
         throw new Error(response.error)
       } else {
@@ -159,31 +182,63 @@
     }
     async build (body) {
       // 1. get encoded trade object
-      let built = await this.request("/trade/build", { body })
+      let built = await this.request("POST", "/trade/build", { body })
       // 2. set maker to the original
       built.original.maker = this.account
       built.encoded.message.maker = this.account
       return built
     }
     send (body) {
-      return this.request("/trade/send", { body })
+      return this.request("POST", "/trade/send", { body })
     }
   }
   class Rarepress {
     async init (o) {
-      if (typeof window.ethereum === 'undefined') {
-        alert("Please install MetaMask from https://metamask.io/")
+      if (o.ethereum) {
+        this.ethereum = o.ethereum
+      } else if (root.ethereum) {
+        this.ethereum = root.ethereum
+      } else {
+        Alert("Please install MetaMask from https://metamask.io/")
         return;
       }
-      let accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (o.http && o.http.fetch) {
+        this.fetch = o.http.fetch
+      } else {
+        this.fetch = fetch.bind(root)
+      }
+      if (o.http && o.http.FormData) {
+        this.FormData = o.http.FormData
+      } else {
+        this.FormData = FormData
+      }
+      let accounts = await this.ethereum.request({ method: 'eth_requestAccounts' });
       let account = accounts[0];
       this.account = account
       if (!o) o = {host: ""}
       if (!o.host) o.host = ""
       this.host = o.host
-      this.token = new Token({ host: o.host, account, })
-      this.ipfs = new VIPFS({ host: o.host, account, })
-      this.trade = new Trade({ host: o.host, account })
+      this.token = new Token({
+        host: o.host,
+        account,
+        ethereum: this.ethereum,
+        FormData: this.FormData,
+        fetch: this.fetch
+      })
+      this.ipfs = new VIPFS({
+        host: o.host,
+        account,
+        ethereum: this.ethereum,
+        FormData: this.FormData,
+        fetch: this.fetch
+      })
+      this.trade = new Trade({
+        host: o.host,
+        account,
+        ethereum: this.ethereum,
+        FormData: this.FormData,
+        fetch: this.fetch
+      })
       return account;
     }
     add(x) {
@@ -202,7 +257,6 @@
       return this.token.create(body)
     }
   }
-  var root = this
   var rarepress = new Rarepress()
   if(typeof exports !== 'undefined') {
     if(typeof module !== 'undefined' && module.exports) {
