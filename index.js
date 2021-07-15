@@ -123,7 +123,7 @@
   *********************/
   class VIPFS extends Thing {
     async upload(blob) {
-      let response = await this.request("POST", this.host + "/ipfs/add", blob, "blob")
+      let response = await this.request("POST", "/ipfs/add", blob, "blob")
       return response.cid
     }
     async import(url) {
