@@ -47,7 +47,7 @@
         Alert(e.message)
       }
     }
-    async request(method, path, o, type) {
+    async request(method, path, blob, type) {
       if (method === "GET") {
         let url = (path.startsWith("http") ? path : this.host + path)
         let r = await this.fetch(url).then((res) => {
@@ -69,7 +69,7 @@
           let r = await this.fetch(this.host + path, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(o)
+            body: JSON.stringify(blob)
           }).then((res) => {
             return res.json()
           })
