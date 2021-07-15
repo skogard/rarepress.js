@@ -20,7 +20,7 @@
 *****************************************/
 (() => {
   var root = this
-  if (typeof root.alert !== "undefined") {
+  if (typeof window !== "undefined") {
     Alert = alert
   } else {
     Alert = console.error
@@ -196,8 +196,8 @@
     async init (o) {
       if (o.ethereum) {
         this.ethereum = o.ethereum
-      } else if (root.ethereum) {
-        this.ethereum = root.ethereum
+      } else if (typeof ethereum !== "undefined") {
+        this.ethereum = ethereum
       } else {
         Alert("Please install MetaMask from https://metamask.io/")
         return;
@@ -205,7 +205,7 @@
       if (o.http && o.http.fetch) {
         this.fetch = o.http.fetch
       } else {
-        this.fetch = fetch.bind(root)
+        this.fetch = fetch.bind(window)
       }
       if (o.http && o.http.FormData) {
         this.FormData = o.http.FormData
@@ -262,7 +262,6 @@
     if(typeof module !== 'undefined' && module.exports) {
       exports = module.exports = rarepress
     }
-    exports.rarepress = rarepress
   } else {
     root.rarepress = rarepress
   }
