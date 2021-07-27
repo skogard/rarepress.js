@@ -1,7 +1,7 @@
 {
   "name": "rarepress.js",
-  "version": "0.0.14",
-  "description": "rarepress javascript client",
+  "version": "0.0.15",
+  "description": "rarepress javascript client for browsers",
   "main": "index.js",
   "author": "skogard",
   "license": "ISC"
