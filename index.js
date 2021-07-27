@@ -20,6 +20,7 @@
 *****************************************/
 (() => {
   var root = this
+  var Alert
   if (typeof window !== "undefined") {
     Alert = alert
   } else {
@@ -71,7 +72,13 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(blob)
           }).then((res) => {
-            return res.json()
+            if (res.ok) {
+              return res.json()
+            } else {
+              return res.text().then((text) => {
+                throw new Error(text)
+              })
+            }
           })
           return r
         }
@@ -80,42 +87,40 @@
   }
   class Token extends Thing {
     async init(type) {
-      let tokenIdURL = await this.request("POST", "/token/init", {
-        type: type,
-        address: this.account
-      }).then((res) => {
-        return res.url
-      })
-      let tokenId = await this.request("GET", tokenIdURL).then((res) => {
-        return res.tokenId
-      })
-      return tokenId
+      const timestamp = Date.now()  // 13 digits
+      const rand = Math.floor(10**11 * Math.random()) // 11 digits
+      const base = "" + timestamp + rand // 24 digits
+      return BigInt(this.account + base).toString(10)
     }
-    build (body) {
+    async build (body) {
+      if (!body.tokenId) {
+        body = await this.initialize(body)
+      }
       let type = (body.supply && body.supply > 1 ? "ERC1155": "ERC721")
       if (!body.creators) {
         body.creators = [{ account: this.account, value: 10000 }]
       }
-      return this.request("POST", "/token/build", { body, type })
+      let response = await this.request("POST", "/token/build", { body, type })
+      return response
     }
-    send (body, sig) {
-      return this.request("POST", "/token/send", { body, sig })
+    async send (body, sig) {
+      let response = await this.request("POST", "/token/send", { body, sig })
+      return response
     }
-    async create (body) {
+    async initialize(body) {
       let type = (body.supply && body.supply > 1 ? "ERC1155": "ERC721")
       let tokenId = await this.init(type)
       body.tokenId = tokenId
       if (!body.metadata.name || body.metadata.name.length === 0) body.metadata.name = ""
       if (!body.metadata.description || body.metadata.description.length === 0) body.metadata.description = ""
       if (!body.metadata.image || body.metadata.image.length === 0) body.metadata.image = ""
-      if (body.tokenId) {
-        let builtToken = await this.build(body)
-        let sig = await this.sign(builtToken)
-        let sent = await this.send(builtToken, sig)
-        return sent
-      } else {
-        Alert("name, description, and image attributes must be set")
-      }
+      return body;
+    }
+    async create (body) {
+      let builtToken = await this.build(body)
+      let sig = await this.sign(builtToken)
+      let sent = await this.send(builtToken, sig)
+      return sent
     }
   }
   /*********************
@@ -158,6 +163,11 @@
         cid = await this.upload(buf)
       } else if (type === "Blob") {
         cid = await this.upload(buf)
+      } else if (type === "Buffer") {
+        cid = await this.upload(buf)
+      } else if (typeof buf === 'object' && typeof buf.pipe === 'function' && buf.readable !== false && typeof buf._read === "function" && typeof buf._readableState === "object") {
+        // readablestream
+        cid = await this.upload(buf)
       } else if (typeof buf === 'string') {
         if (buf.startsWith("http")) {
           cid = await this.import(buf)
@@ -199,7 +209,7 @@
       } else if (typeof ethereum !== "undefined") {
         this.ethereum = ethereum
       } else {
-        Alert("Please install MetaMask from https://metamask.io/")
+        Alert("An Ethereum wallet is required. Please install MetaMask from https://metamask.io/")
         return;
       }
       if (o.http && o.http.fetch) {
@@ -257,12 +267,11 @@
       return this.token.create(body)
     }
   }
-  var rarepress = new Rarepress()
   if(typeof exports !== 'undefined') {
     if(typeof module !== 'undefined' && module.exports) {
-      exports = module.exports = rarepress
+      exports = module.exports = Rarepress
     }
   } else {
-    root.rarepress = rarepress
+    root.Rarepress = Rarepress
   }
 }).call(this)
