@@ -191,11 +191,12 @@
       return sent
     }
     async build (body) {
-      // 1. get encoded trade object
+      if (!body.who) {
+        body.who = { from: this.account }
+      } else if (!body.who.from) {
+        body.who.from = this.account
+      }
       let built = await this.request("POST", "/trade/build", { body })
-      // 2. set maker to the original
-      built.original.maker = this.account
-      built.encoded.message.maker = this.account
       return built
     }
     send (body) {
