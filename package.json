@@ -1,6 +1,6 @@
 {
   "name": "rarepress.js",
-  "version": "0.0.15",
+  "version": "0.0.16",
   "description": "rarepress javascript client for browsers",
   "main": "index.js",
   "author": "skogard",
